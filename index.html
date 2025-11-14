@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keuangan Glow Gelap</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background: #0a0a0a;
+    color: #eee;
+    text-align: center;
+    padding: 25px;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* 🌟 Bintang jatuh */
+.star {
+    position: fixed;
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background: white;
+    opacity: 0.8;
+    animation: fall linear infinite;
+    pointer-events: none;
+}
+@keyframes fall {
+    0% { transform: translateY(-10vh) translateX(0); opacity: 0.8; }
+    100% { transform: translateY(110vh) translateX(30px); opacity: 0; }
+}
+
+.logo {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 15px;
+    animation: floatLogo 4s infinite alternate ease-in-out;
+}
+@keyframes floatLogo { 0% { transform: translateY(0); } 100% { transform: translateY(-6px); } }
+
+h1 {
+    font-size: 2.7em;
+    color: #00ffe5;
+    text-shadow: 0 0 20px #00ffe5, 0 0 50px #00cfff;
+    margin-bottom: 20px;
+}
+
+.container {
+    background: rgba(255,255,255,0.05);
+    border-radius: 25px;
+    box-shadow: 0 8px 25px rgba(0,255,255,0.2), inset 0 0 15px rgba(0,255,255,0.1);
+    max-width: 550px;
+    margin: 0 auto 30px;
+    padding: 25px;
+}
+
+input, select, button {
+    width: 90%;
+    margin: 10px 0;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    font-size: 1em;
+    background: rgba(255,255,255,0.05);
+    color: #eee;
+}
+input:focus, select:focus { outline:none; box-shadow:0 0 15px #00ffe5; }
+
+button {
+    background: linear-gradient(90deg, #00ffe5, #00cfff);
+    color: #000;
+    font-weight: bold;
+    cursor: pointer;
+}
+button:hover { transform: translateY(-2px); box-shadow: 0 0 25px #00cfff, 0 0 50px #00ffe5; }
+
+.saldo {
+    font-size: 1.6em;
+    margin-top: 15px;
+    color: #00ffe5;
+    text-shadow: 0 0 15px #00cfff;
+}
+
+ul { list-style: none; padding: 0; margin-top: 20px; }
+li {
+    background: rgba(0,255,255,0.05);
+    margin: 8px 0;
+    padding: 10px;
+    border-radius: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+li.income { color: #00ff88; text-shadow:0 0 8px #00ff88; }
+li.expense { color: #ff5555; text-shadow:0 0 8px #ff7777; }
+
+canvas {
+    margin-top: 25px;
+    background: rgba(0,255,255,0.05);
+    border-radius: 15px;
+    padding: 10px;
+}
+
+footer { margin-top: 30px; font-size:0.9em; color:#aaa; }
+</style>
+</head>
+<body>
+<img src="https://cdn-icons-png.flaticon.com/512/2910/2910768.png" class="logo" alt="Logo App">
+<h1>💫 Keuangan Pribadi</h1>
+
+<div class="container">
+    <input type="text" id="deskripsi" placeholder="Deskripsi (contoh: Gaji, Makan)">
+    <input type="number" id="jumlah" placeholder="Jumlah (Rp)">
+    <select id="tipe">
+        <option value="income">Pemasukan</option>
+        <option value="expense">Pengeluaran</option>
+    </select>
+    <input type="date" id="tanggal">
+    <button onclick="tambahTransaksi()">Tambah</button>
+
+    <div class="saldo">Saldo: Rp <span id="saldo">0</span></div>
+
+    <canvas id="chartKeuangan" width="400" height="200"></canvas>
+    <ul id="daftar"></ul>
+</div>
+
+<footer>🌟 Dibuat dengan cahaya & bintang 🌟</footer>
+
+<script>
+// Bintang jatuh
+for(let i=0;i<50;i++){
+    const star = document.createElement('div');
+    star.className='star';
+    star.style.width=(Math.random()*3+1)+'px';
+    star.style.height=star.style.width;
+    star.style.top=Math.random()*-100+'vh';
+    star.style.left=Math.random()*100+'vw';
+    star.style.animationDuration=(Math.random()*5+3)+'s';
+    document.body.appendChild(star);
+}
+
+let transaksi = JSON.parse(localStorage.getItem('transaksi')) || [];
+let chart;
+
+function formatRupiah(angka){ return angka.toLocaleString('id-ID'); }
+function formatTanggal(tgl){
+    const d = new Date(tgl);
+    const day = String(d.getDate()).padStart(2,'0');
+    const month = String(d.getMonth()+1).padStart(2,'0');
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+}
+
+function render(){
+    const daftar=document.getElementById('daftar');
+    const saldoEl=document.getElementById('saldo');
+    daftar.innerHTML='';
+
+    let saldo=0, totalIncome=0, totalExpense=0;
+
+    // urut terbaru ke lama
+    const transaksiSorted = [...transaksi].sort((a,b)=> new Date(b.tanggal)-new Date(a.tanggal));
+
+    transaksiSorted.forEach((t,i)=>{
+        const li=document.createElement('li');
+        li.classList.add(t.tipe);
+        li.innerHTML=`${t.deskripsi} - <em>${formatTanggal(t.tanggal)}</em> <strong>Rp ${formatRupiah(t.jumlah)}</strong>
+            <button style="background:none;color:#ccc;border:none;cursor:pointer;" onclick="hapus(${i})">❌</button>`;
+        daftar.appendChild(li);
+
+        if(t.tipe==='income') totalIncome+=t.jumlah;
+        else totalExpense+=t.jumlah;
+        saldo += (t.tipe==='income'?t.jumlah:-t.jumlah);
+    });
+
+    document.getElementById('saldo').textContent = saldo.toLocaleString('id-ID');
+    localStorage.setItem('transaksi',JSON.stringify(transaksi));
+    updateChart(totalIncome,totalExpense);
+}
+
+function tambahTransaksi(){
+    const deskripsi=document.getElementById('deskripsi').value.trim();
+    const jumlah=parseInt(document.getElementById('jumlah').value);
+    const tipe=document.getElementById('tipe').value;
+    const tanggal=document.getElementById('tanggal').value;
+
+    if(!deskripsi || isNaN(jumlah) || jumlah<=0 || !tanggal){
+        alert('Isi semua data dengan benar!');
+        return;
+    }
+
+    transaksi.push({deskripsi,jumlah,tipe,tanggal});
+    document.getElementById('deskripsi').value='';
+    document.getElementById('jumlah').value='';
+    document.getElementById('tanggal').value='';
+    render();
+}
+
+function hapus(i){
+    transaksi.splice(i,1);
+    render();
+}
+
+function updateChart(income,expense){
+    const ctx=document.getElementById('chartKeuangan').getContext('2d');
+    if(chart) chart.destroy();
+    chart=new Chart(ctx,{
+        type:'doughnut',
+        data:{
+            labels:['Pemasukan','Pengeluaran'],
+            datasets:[{
+                data:[income,expense],
+                backgroundColor:['#00ff88','#ff5555'],
+                borderColor:['#00aaff','#ff7777'],
+                borderWidth:2,
+                hoverOffset:12
+            }]
+        },
+        options:{
+            plugins:{legend:{labels:{color:'#eee',font:{size:14}}}}
+        }
+    });
+}
+
+render();
+</script>
+</body>
+</html>
